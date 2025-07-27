@@ -2,15 +2,15 @@ import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scrobblenaut/scrobblenaut.dart';
 import 'package:spotify/spotify.dart';
 import 'package:spotube/collections/env.dart';
 import 'package:spotube/extensions/artist_simple.dart';
 import 'package:spotube/models/database/database.dart';
 import 'package:spotube/provider/database/database.dart';
+import 'package:spotube/services/lastfm/lastfm.dart';
 import 'package:spotube/services/logger/logger.dart';
 
-class ScrobblerNotifier extends AsyncNotifier<Scrobblenaut?> {
+class ScrobblerNotifier extends AsyncNotifier<LastFM?> {
   final StreamController<Track> _scrobbleController =
       StreamController<Track>.broadcast();
   @override
@@ -25,16 +25,7 @@ class ScrobblerNotifier extends AsyncNotifier<Scrobblenaut?> {
         database.select(database.scrobblerTable).watch().listen((event) async {
       try {
         if (event.isNotEmpty) {
-          state = await AsyncValue.guard(
-            () async => Scrobblenaut(
-              lastFM: await LastFM.authenticateWithPasswordHash(
-                apiKey: Env.lastFmApiKey,
-                apiSecret: Env.lastFmApiSecret,
-                username: event.first.username,
-                passwordHash: event.first.passwordHash.value,
-              ),
-            ),
-          );
+          state = AsyncValue.data(LastFM());
         } else {
           state = const AsyncValue.data(null);
         }
@@ -46,13 +37,14 @@ class ScrobblerNotifier extends AsyncNotifier<Scrobblenaut?> {
     final scrobblerSubscription =
         _scrobbleController.stream.listen((track) async {
       try {
-        await state.asData?.value?.track.scrobble(
+        final sessionKey = (await database.select(database.scrobblerTable).getSingle()).passwordHash.value;
+        await state.asData?.value?.scrobble(
+          sessionKey,
           artist: track.artists!.first.name!,
           track: track.name!,
           album: track.album!.name!,
-          chosenByUser: true,
-          duration: track.duration,
-          timestamp: DateTime.now().toUtc(),
+          timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          duration: track.duration?.inSeconds,
           trackNumber: track.trackNumber,
         );
       } catch (e, stackTrace) {
@@ -69,36 +61,26 @@ class ScrobblerNotifier extends AsyncNotifier<Scrobblenaut?> {
       return null;
     }
 
-    return Scrobblenaut(
-      lastFM: await LastFM.authenticateWithPasswordHash(
-        apiKey: Env.lastFmApiKey,
-        apiSecret: Env.lastFmApiSecret,
-        username: loginInfo.username,
-        passwordHash: loginInfo.passwordHash.value,
-      ),
-    );
+    return LastFM();
   }
 
-  Future<void> login(
-    String username,
-    String password,
-  ) async {
+  Future<String> login() async {
+    final lastfm = LastFM();
+    final token = await lastfm.getToken();
+    final url = 'https://www.last.fm/api/auth/?api_key=${Env.lastFmApiKey}&token=$token';
+    return url;
+  }
+
+  Future<void> getSession(String token) async {
+    final lastfm = LastFM();
+    final sessionKey = await lastfm.getSession(token);
+    final userInfo = await lastfm.getUserInfo(sessionKey);
     final database = ref.read(databaseProvider);
-
-    final lastFm = await LastFM.authenticate(
-      apiKey: Env.lastFmApiKey,
-      apiSecret: Env.lastFmApiSecret,
-      username: username,
-      password: password,
-    );
-
-    if (!lastFm.isAuth) throw Exception("Invalid credentials");
-
     await database.into(database.scrobblerTable).insert(
           ScrobblerTableCompanion.insert(
             id: const Value(0),
-            username: username,
-            passwordHash: DecryptedText(lastFm.passwordHash!),
+            username: userInfo['name'],
+            passwordHash: DecryptedText(sessionKey),
           ),
         );
   }
@@ -114,14 +96,20 @@ class ScrobblerNotifier extends AsyncNotifier<Scrobblenaut?> {
   }
 
   Future<void> love(Track track) async {
-    await state.asData?.value?.track.love(
+    final database = ref.read(databaseProvider);
+    final sessionKey = (await database.select(database.scrobblerTable).getSingle()).passwordHash.value;
+    await state.asData?.value?.love(
+      sessionKey,
       artist: track.artists!.asString(),
       track: track.name!,
     );
   }
 
   Future<void> unlove(Track track) async {
-    await state.asData?.value?.track.unLove(
+    final database = ref.read(databaseProvider);
+    final sessionKey = (await database.select(database.scrobblerTable).getSingle()).passwordHash.value;
+    await state.asData?.value?.unlove(
+      sessionKey,
       artist: track.artists!.asString(),
       track: track.name!,
     );
@@ -129,6 +117,6 @@ class ScrobblerNotifier extends AsyncNotifier<Scrobblenaut?> {
 }
 
 final scrobblerProvider =
-    AsyncNotifierProvider<ScrobblerNotifier, Scrobblenaut?>(
+    AsyncNotifierProvider<ScrobblerNotifier, LastFM?>(
   () => ScrobblerNotifier(),
 );

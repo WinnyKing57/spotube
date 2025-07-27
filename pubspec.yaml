@@ -97,10 +97,6 @@ dependencies:
   permission_handler: ^11.3.1
   piped_client: ^0.1.2
   riverpod: ^2.5.1
-  scrobblenaut:
-    git:
-      ref: dart-3-support
-      url: https://github.com/KRTirtho/scrobblenaut.git
   scroll_to_index: ^3.0.1
   shadcn_flutter: ^0.0.34
   shared_preferences: ^2.2.3
@@ -130,6 +126,7 @@ dependencies:
   wikipedia_api: ^0.1.0
   win32_registry: ^1.1.5
   window_manager: ^0.4.3
+  xml: ^6.5.0
   youtube_explode_dart: ^2.4.0-dev.1
   yt_dlp_dart:
     git:
@@ -158,7 +155,6 @@ dev_dependencies:
   process_run: ^0.14.2
   pubspec_parse: ^1.3.0
   pub_api_client: ^3.0.0
-  xml: ^6.5.0
   io: ^1.0.4
   drift_dev: ^2.21.0
   auto_route_generator: ^9.0.0

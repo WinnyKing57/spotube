@@ -9,6 +9,7 @@ import 'package:spotube/components/titlebar/titlebar.dart';
 import 'package:spotube/extensions/context.dart';
 import 'package:spotube/provider/scrobbler/scrobbler.dart';
 import 'package:auto_route/auto_route.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 @RoutePage()
 class LastFMLoginPage extends HookConsumerWidget {
@@ -18,13 +19,6 @@ class LastFMLoginPage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, ref) {
     final scrobblerNotifier = ref.read(scrobblerProvider.notifier);
-
-    final usernameKey =
-        useMemoized(() => const FormKey<String>("username"), []);
-    final passwordKey =
-        useMemoized(() => const FormKey<String>("password"), []);
-
-    final passwordVisible = useState(false);
 
     final isLoading = useState(false);
 
@@ -37,120 +31,70 @@ class LastFMLoginPage extends HookConsumerWidget {
           ),
         ),
       ],
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Flexible(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 400),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.all(16),
-              child: Card(
-                padding: const EdgeInsets.all(16.0),
-                child: Form(
-                  onSubmit: (context, values) async {
-                    try {
-                      isLoading.value = true;
-                      await scrobblerNotifier.login(
-                        values[usernameKey].trim(),
-                        values[passwordKey],
-                      );
-                      if (context.mounted) {
-                        context.back();
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        showPromptDialog(
-                          context: context,
-                          title: context.l10n.error("Authentication failed"),
-                          message: e.toString(),
-                          cancelText: null,
-                        );
-                      }
-                    } finally {
-                      isLoading.value = false;
-                    }
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 10,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          color: const Color.fromARGB(255, 186, 0, 0),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        child: const Icon(
-                          SpotubeIcons.lastFm,
-                          color: Colors.white,
-                          size: 60,
-                        ),
-                      ),
-                      const Text("last.fm").h3(),
-                      Text(context.l10n.login_with_your_lastfm),
-                      AutofillGroup(
-                        child: Column(
-                          spacing: 10,
-                          children: [
-                            FormField(
-                              label: Text(context.l10n.username),
-                              key: usernameKey,
-                              validator: const NotEmptyValidator(
-                                message: "Username is required",
-                              ),
-                              child: TextField(
-                                autofillHints: const [
-                                  AutofillHints.username,
-                                  AutofillHints.email,
-                                ],
-                                placeholder: Text(context.l10n.username),
-                              ),
-                            ),
-                            FormField(
-                              key: passwordKey,
-                              validator: const NotEmptyValidator(
-                                message: "Password is required",
-                              ),
-                              label: Text(context.l10n.password),
-                              child: TextField(
-                                autofillHints: const [
-                                  AutofillHints.password,
-                                ],
-                                obscureText: !passwordVisible.value,
-                                placeholder: Text(context.l10n.password),
-                                features: [
-                                  InputFeature.trailing(
-                                    IconButton.ghost(
-                                      icon: Icon(
-                                        passwordVisible.value
-                                            ? SpotubeIcons.eye
-                                            : SpotubeIcons.noEye,
-                                      ),
-                                      onPressed: () => passwordVisible.value =
-                                          !passwordVisible.value,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      FormErrorBuilder(builder: (context, errors, child) {
-                        return Button.primary(
-                          onPressed: () => context.submitForm(),
-                          enabled: errors.isEmpty && !isLoading.value,
-                          child: Text(context.l10n.login),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                color: const Color.fromARGB(255, 186, 0, 0),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: const Icon(
+                SpotubeIcons.lastFm,
+                color: Colors.white,
+                size: 60,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(context.l10n.lastfm_brand).h3(),
+            const SizedBox(height: 8),
+            Text(context.l10n.login_with_your_lastfm),
+            const SizedBox(height: 16),
+            Button.primary(
+              onPressed: () async {
+                try {
+                  isLoading.value = true;
+                  final url = await scrobblerNotifier.login();
+                  await launchUrl(Uri.parse(url));
+                  if (context.mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(context.l10n.login_with_lastfm),
+                        content: Text(context.l10n.lastfm_authorization_note),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              final token = Uri.parse(url).queryParameters['token']!;
+                              scrobblerNotifier.getSession(token);
+                              Navigator.of(context).pop();
+                              Navigator.of(context).pop();
+                            },
+                            child: Text(context.l10n.done),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    showPromptDialog(
+                      context: context,
+                      title: context.l10n.error("Authentication failed"),
+                      message: e.toString(),
+                      cancelText: null,
+                    );
+                  }
+                } finally {
+                  isLoading.value = false;
+                }
+              },
+              child: Text(context.l10n.login_with_lastfm),
+            ),
+          ],
+        ),
       ),
     );
   }

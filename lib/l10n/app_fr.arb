@@ -270,6 +270,8 @@
   "download_music_codec": "Télécharger le codec musical",
   "streaming_music_codec": "Codec de musique en streaming",
   "login_with_lastfm": "Se connecter avec Last.fm",
+  "lastfm_brand": "last.fm",
+  "lastfm_authorization_note": "After authorizing Spotube on the Last.fm website, click the 'Done' button below.",
   "connect": "Connecter",
   "disconnect_lastfm": "Déconnecter de Last.fm",
   "disconnect": "Déconnecter",
